@@ -110,7 +110,6 @@ const List = ({
     columnKey => fields[columnKey]?.label || columnKey
   );
 
-  console.log('objects', objects);
   const rows =
     ListComponent &&
     objects.map(object => ({
