@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Form } from 'meteor/quave:forms/Form';
 import { useQuery, useMutation } from '@apollo/react-hooks';
 import gql from 'graphql-tag';
+import { defaultFormatValue } from './defaultFormatValue';
 
 const defaultStyles = {
   buttonsCell: {
@@ -76,24 +77,11 @@ const List = ({
   definition,
   pickColumns,
   omitColumns,
-  transformBeforeUse,
   crudActions,
 }) => {
   const { fields } = definition;
   const { data = {} } = useQuery(gql(definition.toGraphQLManyQuery()));
-  const rawObjects = data[definition.graphQLManyQueryCamelCaseName] || [];
-  const objects = transformBeforeUse
-    ? rawObjects.map(object =>
-        Object.fromEntries(
-          Object.entries(object).map(([key, rawValue]) => {
-            const value = transformBeforeUse(rawValue, fields[key], key);
-
-            // Return value only if it's not null or undefined
-            return [key, value ?? rawValue];
-          })
-        )
-      )
-    : rawObjects;
+  const objects = data[definition.graphQLManyQueryCamelCaseName] || [];
   const [removeMutation] = useMutation(
     gql(definition.toGraphQLEraseMutation())
   );
@@ -161,7 +149,6 @@ const FormComponent = ({
   id,
   isCreating,
   definition,
-  transformAfterUse,
   formProps,
   crudActions,
 }) => {
@@ -174,7 +161,6 @@ const FormComponent = ({
     definition,
     id,
   });
-  console.log('initialValues', initialValues);
 
   if (loading) {
     return null;
@@ -185,22 +171,11 @@ const FormComponent = ({
       initialValues={initialValues}
       definition={definition}
       onSubmit={values => {
-        const transformedValues = transformAfterUse
-          ? Object.fromEntries(
-              Object.entries(values).map(([key, rawValue]) => {
-                const value = transformAfterUse(rawValue, fields[key], key);
-
-                // Return value only if it's not null or undefined
-                return [key, value ?? rawValue];
-              })
-            )
-          : values;
-
         saveObjectMutation({
           variables: {
             [definition.nameCamelCase]: {
               _id: isCreating ? undefined : id,
-              ...definition.toSimpleSchema().clean(transformedValues),
+              ...definition.toSimpleSchema().clean(values),
             },
           },
           refetchQueries: [{ query: gql(definition.toGraphQLManyQuery()) }],
@@ -218,16 +193,17 @@ export const Crud = ({
   objectId,
   isCreatingObject,
   definition,
-  formatField = () => {},
+  formatValue: rawFormatValue,
   pickColumns,
   omitColumns,
   formProps: rawFormProps = {},
-  transformBeforeUse,
-  transformAfterUse,
   listComponent = DefaultListComponent,
 }) => {
   const [id, setId] = useState(objectId);
   const [isCreating, setIsCreating] = useState(isCreatingObject);
+
+  const formatField = (...args) =>
+    rawFormatValue?.(...args) ?? defaultFormatValue(...args);
   const goToList = () => {
     setId('');
     setIsCreating(false);
@@ -265,7 +241,6 @@ export const Crud = ({
     <>
       {id || isCreating ? (
         <FormComponent
-          transformAfterUse={transformAfterUse}
           definition={definition}
           id={id}
           isCreating={isCreating}
@@ -279,7 +254,6 @@ export const Crud = ({
           omitColumns={omitColumns}
           pickColumns={pickColumns}
           ListComponent={listComponent}
-          transformBeforeUse={transformBeforeUse}
           crudActions={crudActions}
         />
       )}

@@ -38,7 +38,7 @@ quave:collections@1.0.2
 quave:crud@0.0.1
 quave:custom-type-date-time@1.0.1
 quave:definitions@1.0.4
-quave:forms@3.0.0
+quave:forms@3.0.1
 quave:settings@1.0.0
 random@1.2.0
 react-fast-refresh@0.1.1
