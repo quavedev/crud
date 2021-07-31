@@ -9,7 +9,7 @@ Package.describe({
 Package.onUse(api => {
   api.versionsFrom('1.10.2');
   api.use(['ecmascript']);
-  api.use(['quave:forms']);
+  api.use(['quave:forms@3.0.1']);
 
   api.addFiles('Crud.js', 'client');
   api.export('Crud', 'client');
