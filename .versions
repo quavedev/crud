@@ -35,10 +35,10 @@ npm-mongo@3.9.0
 ordered-dict@1.1.0
 promise@0.12.0
 quave:collections@1.0.2
-quave:crud@0.0.1
+quave:crud@0.0.3
 quave:custom-type-date-time@1.0.1
 quave:definitions@1.0.4
-quave:forms@3.0.1
+quave:forms@3.0.2
 quave:settings@1.0.0
 random@1.2.0
 react-fast-refresh@0.1.1

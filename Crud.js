@@ -3,13 +3,36 @@ import { Form } from 'meteor/quave:forms/Form';
 import { useQuery, useMutation } from '@apollo/react-hooks';
 import gql from 'graphql-tag';
 import { defaultFormatValue } from './defaultFormatValue';
+import { buildRoute, getRidOfTheAnnoyingTypenameFieldDeep } from './helpers';
+import {
+  Route,
+  Switch,
+  useHistory,
+  useParams,
+  useRouteMatch,
+} from 'react-router-dom';
 
 const defaultStyles = {
-  buttonsCell: {
-    padding: '8px',
+  listContainer: {
+    width: 'min-content',
+  },
+  tableHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0.5em',
+  },
+  newButton: {
+    justifySelf: 'flex-end',
+    marginLeft: 'auto',
   },
   table: {
     borderCollapse: 'collapse',
+  },
+  paginationMenu: {
+    padding: '0.5em',
+    display: 'flex',
+    gap: '0.5em',
+    justifyContent: 'center',
   },
   tr: {
     cursor: 'pointer',
@@ -17,58 +40,89 @@ const defaultStyles = {
       backgroundColor: '#ddd',
     },
   },
-  th: { padding: '8px', border: '1px solid #ddd', margin: '0px' },
-  td: { padding: '8px', border: '1px solid #ddd', margin: '0px' },
+  th: { padding: '0.5em', border: '1px solid #ddd', margin: '0px' },
+  td: { padding: '0.5em', border: '1px solid #ddd', margin: '0px' },
 };
 
-const DefaultListComponent = ({ columnNames, rows, crudActions }) => (
-  <table style={defaultStyles.table}>
-    <thead>
-      <tr>
-        {columnNames.map((name, index) => (
-          <th
-            key={`table-header-${name}-${rows[index]?.object._id}`}
-            style={defaultStyles.th}
-          >
-            {name}
-          </th>
-        ))}
-      </tr>
-    </thead>
-    <tbody>
-      {rows.map(({ values, object, rowActions }) => (
-        <tr
-          onClick={() => crudActions.goToObject(object._id)}
-          key={`table-row-${object._id}`}
-          style={defaultStyles.tr}
-        >
-          {values.map((value, index) => (
-            <td
-              key={`table-cell-${columnNames[index]}-${value}-${object._id}`}
-              style={defaultStyles.td}
+const DefaultListComponent = ({
+  definition,
+  columnNames,
+  rows,
+  crudActions,
+  listActions,
+  pagination,
+}) => (
+  <div style={defaultStyles.listContainer}>
+    <div style={defaultStyles.tableHeader}>
+      <div>{definition.pluralName}</div>
+      <button
+        style={defaultStyles.newButton}
+        onClick={crudActions.goToNewObject}
+      >
+        add {definition.name}
+      </button>
+    </div>
+    <table style={defaultStyles.table}>
+      <thead>
+        <tr>
+          {columnNames.map((name, index) => (
+            <th
+              key={`table-header-${name}-${rows[index]?.object._id}`}
+              style={defaultStyles.th}
             >
-              {`${value}`}
-            </td>
+              {name}
+            </th>
           ))}
-          <td style={defaultStyles.td}>
-            <button
-              onClick={event => {
-                event.stopPropagation();
-                rowActions.remove();
-              }}
-            >
-              delete
-            </button>
-          </td>
         </tr>
-      ))}
-      <tr>
-        <td style={defaultStyles.buttonsCell}>
-          <button onClick={crudActions.goToNewObject}>NEW</button>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {rows.map(({ values, object, rowActions }) => (
+          <tr
+            onClick={() => crudActions.goToObject(object._id)}
+            key={`table-row-${object._id}`}
+            style={defaultStyles.tr}
+          >
+            {values.map((value, index) => (
+              <td
+                key={`table-cell-${columnNames[index]}-${value}-${object._id}`}
+                style={defaultStyles.td}
+              >
+                {`${value}`}
+              </td>
+            ))}
+            <td style={defaultStyles.td}>
+              <button
+                onClick={event => {
+                  event.stopPropagation();
+                  rowActions.remove();
+                }}
+              >
+                delete
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    <div style={defaultStyles.paginationMenu}>
+      <button onClick={listActions.firstPage} disabled={!pagination?.previous}>
+        &lt;&lt;
+      </button>
+      <button
+        onClick={listActions.previousPage}
+        disabled={!pagination?.previous}
+      >
+        &lt;
+      </button>
+      <div>{pagination?.currentPage}</div>
+      <button onClick={listActions.nextPage} disabled={!pagination?.next}>
+        &gt;
+      </button>
+      <button onClick={listActions.lastPage} disabled={!pagination?.next}>
+        &gt;&gt;
+      </button>
+    </div>
+  </div>
 );
 
 const List = ({
@@ -78,10 +132,23 @@ const List = ({
   pickColumns,
   omitColumns,
   crudActions,
+  limit,
+  skip,
 }) => {
+  const [paginationAction, setPaginationAction] = useState({ limit, skip });
   const { fields } = definition;
-  const { data = {} } = useQuery(gql(definition.toGraphQLManyQuery()));
-  const objects = data[definition.graphQLManyQueryCamelCaseName] || [];
+  const { data = {}, ...rest } = useQuery(
+    gql(definition.toGraphQLPaginatedQuery()),
+    {
+      variables: { paginationAction },
+    }
+  );
+  const paginatedResponse =
+    data[definition.graphQLPaginatedQueryCamelCaseName] || {};
+  const { items: objects = [] } = paginatedResponse;
+  const pagination = getRidOfTheAnnoyingTypenameFieldDeep(
+    paginatedResponse.pagination
+  );
   const [removeMutation] = useMutation(
     gql(definition.toGraphQLEraseMutation())
   );
@@ -120,10 +187,36 @@ const List = ({
       ),
     }));
 
+  const nextPage = () => {
+    if (pagination.next) {
+      setPaginationAction(pagination.next);
+    }
+  };
+  const firstPage = () => {
+    if (pagination.first) {
+      setPaginationAction(pagination.first);
+    }
+  };
+  const lastPage = () => {
+    if (pagination.next) {
+      setPaginationAction(pagination.last);
+    }
+  };
+  const previousPage = () => {
+    if (pagination.previous) {
+      setPaginationAction(pagination.previous);
+    }
+  };
+
+  const listActions = { nextPage, previousPage, firstPage, lastPage };
+
   return (
     <ListComponent
+      definition={definition}
       crudActions={crudActions}
+      listActions={listActions}
       columnNames={columnNames}
+      pagination={pagination}
       rows={rows}
     />
   );
@@ -145,14 +238,8 @@ const getInitialValues = ({ isCreating, definition, id }) => {
   return { initialValues: editingObject, ...queryRest };
 };
 
-const FormComponent = ({
-  id,
-  isCreating,
-  definition,
-  formProps,
-  crudActions,
-}) => {
-  const { fields } = definition;
+const FormComponent = ({ isCreating, definition, formProps, crudActions }) => {
+  const { id } = useParams();
   const [saveObjectMutation] = useMutation(
     gql(definition.toGraphQLSaveMutation())
   );
@@ -190,8 +277,8 @@ const FormComponent = ({
 };
 
 export const Crud = ({
-  objectId,
-  isCreatingObject,
+  limit = 10,
+  skip = 0,
   definition,
   formatValue: rawFormatValue,
   pickColumns,
@@ -199,22 +286,19 @@ export const Crud = ({
   formProps: rawFormProps = {},
   listComponent = DefaultListComponent,
 }) => {
-  const [id, setId] = useState(objectId);
-  const [isCreating, setIsCreating] = useState(isCreatingObject);
+  const match = useRouteMatch();
+  const history = useHistory();
 
   const formatField = (...args) =>
     rawFormatValue?.(...args) ?? defaultFormatValue(...args);
   const goToList = () => {
-    setId('');
-    setIsCreating(false);
+    history.push(`${match.path}`);
   };
-  const goToObject = newObjectId => {
-    setId(newObjectId);
-    setIsCreating(false);
+  const goToObject = objectId => {
+    history.push(buildRoute([match.path, objectId]));
   };
   const goToNewObject = () => {
-    setId('');
-    setIsCreating(true);
+    history.push(buildRoute([match.path, 'new']));
   };
 
   const crudActions = { goToList, goToObject, goToNewObject };
@@ -225,7 +309,11 @@ export const Crud = ({
     actions: [
       ...(rawFormProps.actions || []),
       props => (
-        <button onClick={goToList} style={{ marginRight: '1em' }} {...props}>
+        <button
+          onClick={history.goBack}
+          style={{ marginRight: '1em' }}
+          {...props}
+        >
           cancel
         </button>
       ),
@@ -238,16 +326,23 @@ export const Crud = ({
   };
 
   return (
-    <>
-      {id || isCreating ? (
+    <Switch>
+      <Route exact path={buildRoute([match.path, 'new'])}>
         <FormComponent
           definition={definition}
-          id={id}
-          isCreating={isCreating}
+          isCreating={true}
           formProps={formProps}
           crudActions={crudActions}
         />
-      ) : (
+      </Route>
+      <Route path={buildRoute([match.path, ':id'])}>
+        <FormComponent
+          definition={definition}
+          formProps={formProps}
+          crudActions={crudActions}
+        />
+      </Route>
+      <Route path={match.path}>
         <List
           definition={definition}
           formatField={formatField}
@@ -255,8 +350,10 @@ export const Crud = ({
           pickColumns={pickColumns}
           ListComponent={listComponent}
           crudActions={crudActions}
+          limit={limit}
+          skip={skip}
         />
-      )}
-    </>
+      </Route>
+    </Switch>
   );
 };
