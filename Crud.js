@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Form } from 'meteor/quave:forms/Form';
 import { useQuery, useMutation } from '@apollo/react-hooks';
 import gql from 'graphql-tag';
 import { defaultFormatValue } from './defaultFormatValue';
-import { buildRoute, getRidOfTheAnnoyingTypenameFieldDeep } from './helpers';
+import {
+  buildRoute,
+  getRidOfTheAnnoyingTypenameFieldDeep,
+  useUrlQuery,
+} from './helpers';
 import {
   Route,
   Switch,
@@ -132,17 +136,17 @@ const List = ({
   pickColumns,
   omitColumns,
   crudActions,
-  limit,
-  skip,
+  inputLimit,
 }) => {
-  const [paginationAction, setPaginationAction] = useState({ limit, skip });
+  const history = useHistory();
+  const match = useRouteMatch();
+  const urlQuery = useUrlQuery();
+  const limit = +urlQuery.get('limit') || inputLimit;
+  const skip = +urlQuery.get('skip') || 0;
   const { fields } = definition;
-  const { data = {}, ...rest } = useQuery(
-    gql(definition.toGraphQLPaginatedQuery()),
-    {
-      variables: { paginationAction },
-    }
-  );
+  const { data = {} } = useQuery(gql(definition.toGraphQLPaginatedQuery()), {
+    variables: { paginationAction: { limit, skip } },
+  });
   const paginatedResponse =
     data[definition.graphQLPaginatedQueryCamelCaseName] || {};
   const { items: objects = [] } = paginatedResponse;
@@ -173,7 +177,7 @@ const List = ({
         remove: () =>
           removeMutation({
             variables: { _id: object._id },
-            refetchQueries: [{ query: gql(definition.toGraphQLManyQuery()) }],
+            refetchQueries: [definition.graphQLPaginatedQueryName],
           }),
       },
       object,
@@ -189,22 +193,30 @@ const List = ({
 
   const nextPage = () => {
     if (pagination.next) {
-      setPaginationAction(pagination.next);
+      history.push(
+        `${match.path}?limit=${pagination.next.limit}&skip=${pagination.next.skip}`
+      );
     }
   };
   const firstPage = () => {
     if (pagination.first) {
-      setPaginationAction(pagination.first);
+      history.push({
+        search: `?limit=${pagination.first.limit}&skip=${pagination.first.skip}`,
+      });
     }
   };
   const lastPage = () => {
     if (pagination.next) {
-      setPaginationAction(pagination.last);
+      history.push({
+        search: `?limit=${pagination.last.limit}&skip=${pagination.last.skip}`,
+      });
     }
   };
   const previousPage = () => {
     if (pagination.previous) {
-      setPaginationAction(pagination.previous);
+      history.push({
+        search: `?limit=${pagination.previous.limit}&skip=${pagination.previous.skip}`,
+      });
     }
   };
 
@@ -265,7 +277,7 @@ const FormComponent = ({ isCreating, definition, formProps, crudActions }) => {
               ...definition.toSimpleSchema().clean(values),
             },
           },
-          refetchQueries: [{ query: gql(definition.toGraphQLManyQuery()) }],
+          refetchQueries: [definition.graphQLPaginatedQueryName],
         });
 
         crudActions.goToList();
@@ -277,8 +289,7 @@ const FormComponent = ({ isCreating, definition, formProps, crudActions }) => {
 };
 
 export const Crud = ({
-  limit = 10,
-  skip = 0,
+  limit: inputLimit = 10,
   definition,
   formatValue: rawFormatValue,
   pickColumns,
@@ -310,7 +321,10 @@ export const Crud = ({
       ...(rawFormProps.actions || []),
       props => (
         <button
-          onClick={history.goBack}
+          onClick={event => {
+            event.preventDefault();
+            history.goBack();
+          }}
           style={{ marginRight: '1em' }}
           {...props}
         >
@@ -350,8 +364,7 @@ export const Crud = ({
           pickColumns={pickColumns}
           ListComponent={listComponent}
           crudActions={crudActions}
-          limit={limit}
-          skip={skip}
+          inputLimit={inputLimit}
         />
       </Route>
     </Switch>

@@ -1,3 +1,5 @@
+import { useLocation } from 'react-router-dom';
+
 export const buildRoute = parts =>
   '/' +
   parts
@@ -27,4 +29,8 @@ export const getRidOfTheAnnoyingTypenameFieldDeep = value => {
   }
 
   return newValue;
+};
+
+export const useUrlQuery = () => {
+  return new URLSearchParams(useLocation().search);
 };
