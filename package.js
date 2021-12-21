@@ -1,7 +1,7 @@
 /* global Package */
 Package.describe({
   name: 'quave:crud',
-  version: '0.0.3',
+  version: '0.1.0-beta.0',
   summary: 'Full CRUD easier than ever',
   git: 'https://github.com/quavedev/crud',
 });
